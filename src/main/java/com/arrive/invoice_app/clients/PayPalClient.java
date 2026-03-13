@@ -54,29 +54,6 @@ public class PayPalClient {
         return paymentResponse;
     }
 
-    public PayPalPaymentResponse processRefund(String originalTransactionId, double amount, String currency) {
-        String url = paypalApiUrl + "/refund";
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("Authorization", "Bearer " + accessToken);
-
-        Map<String, Object> requestBody = new HashMap<>();
-        requestBody.put("original_transaction_id", originalTransactionId);
-        requestBody.put("amount", Map.of("currency_code", currency, "value", String.valueOf(amount)));
-
-        HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
-
-        ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
-
-        PayPalPaymentResponse refundResponse = new PayPalPaymentResponse();
-        refundResponse.setSuccess(response.getStatusCode().is2xxSuccessful());
-        refundResponse.setTransactionId("PAYPAL-REF-" + System.currentTimeMillis());
-        refundResponse.setStatus(response.getStatusCode().is2xxSuccessful() ? "REFUNDED" : "FAILED");
-
-        return refundResponse;
-    }
-
     public static class PayPalPaymentResponse {
         private boolean success;
         private String transactionId;

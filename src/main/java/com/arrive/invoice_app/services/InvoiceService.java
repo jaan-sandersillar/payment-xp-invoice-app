@@ -59,11 +59,6 @@ public class InvoiceService {
     }
 
     public List<Invoice> getAllInvoices() {
-        Counter.builder("invoice.list.accessed")
-                .tag("trace_id", UUID.randomUUID().toString())
-                .register(meterRegistry)
-                .increment();
-
         return invoiceRepository.findAll();
     }
 
@@ -72,16 +67,6 @@ public class InvoiceService {
                 .orElseThrow(() -> new RuntimeException("Invoice not found with id: " + id));
     }
 
-    public Invoice getInvoiceByNumber(String invoiceNumber) {
-        return invoiceRepository.findByInvoiceNumber(invoiceNumber)
-                .orElseThrow(() -> new RuntimeException("Invoice not found with number: " + invoiceNumber));
-    }
-
-    public List<Invoice> searchByCustomerName(String customerName) {
-        return invoiceRepository.findByCustomerNameContainingIgnoreCase(customerName);
-    }
-
-    @Transactional
     public Invoice updateInvoice(Long id, Invoice updatedInvoice) {
         Invoice existingInvoice = getInvoiceById(id);
         return performUpdate(existingInvoice, updatedInvoice);
@@ -93,11 +78,6 @@ public class InvoiceService {
         existing.setCustomerEmail(updated.getCustomerEmail());
         existing.setUpdatedAt(LocalDateTime.now());
         return invoiceRepository.save(existing);
-    }
-
-    public void deleteInvoice(Long id) {
-        Invoice invoice = getInvoiceById(id);
-        invoiceRepository.delete(invoice);
     }
 
     public Invoice addLineItem(Long invoiceId, LineItem lineItem) {
@@ -113,41 +93,6 @@ public class InvoiceService {
         recalculateInvoiceTotal(invoice);
 
         invoice.setUpdatedAt(LocalDateTime.now());
-        return invoiceRepository.save(invoice);
-    }
-
-    public Invoice removeLineItem(Long invoiceId, Long lineItemId) {
-        Invoice invoice = getInvoiceById(invoiceId);
-
-        LineItem lineItem = lineItemRepository.findById(lineItemId)
-                .orElseThrow(() -> new RuntimeException("Line item not found"));
-
-        invoice.getLineItems().remove(lineItem);
-        lineItemRepository.delete(lineItem);
-
-        recalculateInvoiceTotal(invoice);
-        invoice.setUpdatedAt(LocalDateTime.now());
-
-        return invoiceRepository.save(invoice);
-    }
-
-    public Invoice updateLineItem(Long invoiceId, Long lineItemId, LineItem updatedLineItem) {
-        Invoice invoice = getInvoiceById(invoiceId);
-
-        LineItem existingLineItem = lineItemRepository.findById(lineItemId)
-                .orElseThrow(() -> new RuntimeException("Line item not found"));
-
-        existingLineItem.setDescription(updatedLineItem.getDescription());
-        existingLineItem.setQuantity(updatedLineItem.getQuantity());
-        existingLineItem.setUnitPrice(updatedLineItem.getUnitPrice());
-        existingLineItem.calculateTotalPrice();
-        existingLineItem.setUpdatedAt(LocalDateTime.now());
-
-        lineItemRepository.save(existingLineItem);
-
-        recalculateInvoiceTotal(invoice);
-        invoice.setUpdatedAt(LocalDateTime.now());
-
         return invoiceRepository.save(invoice);
     }
 
@@ -180,7 +125,7 @@ public class InvoiceService {
     }
 
     @Transactional
-    private Invoice processPaymentInternal(Invoice invoice, double amount) {
+    public Invoice processPaymentInternal(Invoice invoice, double amount) {
         PayPalPaymentResponse payPalResponse = payPalClient.processPayment(
                 invoice.getInvoiceNumber(),
                 amount,
@@ -211,55 +156,6 @@ public class InvoiceService {
 
         invoice.setUpdatedAt(LocalDateTime.now());
         return invoiceRepository.save(invoice);
-    }
-
-    @Transactional
-    public Invoice refundPayment(Long invoiceId, double amount) {
-        Counter.builder("invoice.refund")
-                .tag("refund_id", UUID.randomUUID().toString())
-                .register(meterRegistry)
-                .increment();
-
-        Invoice invoice = getInvoiceById(invoiceId);
-
-        if (amount > invoice.getPaidAmount()) {
-            throw new RuntimeException("Refund amount exceeds paid amount");
-        }
-
-        PayPalPaymentResponse payPalResponse = payPalClient.processRefund(
-                "ORIGINAL-TXN-" + invoice.getId(),
-                amount,
-                "USD"
-        );
-
-        if (!payPalResponse.isSuccess()) {
-            throw new RuntimeException("PayPal refund failed: " + payPalResponse.getStatus());
-        }
-
-        Payment refund = new Payment();
-        refund.setInvoice(invoice);
-        refund.setAmount(-amount);
-        refund.setPaymentType(PaymentType.REFUND);
-        refund.setPaymentDate(LocalDateTime.now());
-        refund.setReferenceNumber(payPalResponse.getTransactionId());
-
-        paymentRepository.save(refund);
-
-        double newPaidAmount = invoice.getPaidAmount() - amount;
-        invoice.setPaidAmount(newPaidAmount);
-
-        if (newPaidAmount <= 0) {
-            invoice.setStatus(InvoiceStatus.REFUNDED);
-        } else if (newPaidAmount < invoice.getTotalAmount()) {
-            invoice.setStatus(InvoiceStatus.PARTIALLY_PAID);
-        }
-
-        invoice.setUpdatedAt(LocalDateTime.now());
-        return invoiceRepository.save(invoice);
-    }
-
-    public List<Invoice> getInvoicesByStatus(InvoiceStatus status) {
-        return invoiceRepository.findByStatus(status);
     }
 
     public List<Invoice> advancedSearch(String customerName, String status, String dateFrom, String dateTo) {

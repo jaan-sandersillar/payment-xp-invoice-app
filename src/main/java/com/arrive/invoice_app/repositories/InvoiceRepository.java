@@ -1,25 +1,15 @@
 package com.arrive.invoice_app.repositories;
 
 import com.arrive.invoice_app.entities.Invoice;
-import com.arrive.invoice_app.entities.InvoiceStatus;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Optional;
 
 @Repository
 public interface InvoiceRepository extends JpaRepository<Invoice, Long>, InvoiceRepositoryCustom {
-
-    List<Invoice> findByStatus(InvoiceStatus status);
-
-    List<Invoice> findByCustomerEmail(String customerEmail);
-
-    Optional<Invoice> findByInvoiceNumber(String invoiceNumber);
-
-    List<Invoice> findByCustomerNameContainingIgnoreCase(String customerName);
 }
 
 interface InvoiceRepositoryCustom {
