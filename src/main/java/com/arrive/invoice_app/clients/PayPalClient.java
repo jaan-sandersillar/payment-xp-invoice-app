@@ -1,5 +1,6 @@
 package com.arrive.invoice_app.clients;
 
+import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -30,6 +31,7 @@ public class PayPalClient {
     @Autowired
     private RestTemplate restTemplate;
 
+    @Transactional
     public PayPalPaymentResponse processPayment(String invoiceNumber, double amount, String currency) {
         String url = paypalApiUrl + "/capture";
 

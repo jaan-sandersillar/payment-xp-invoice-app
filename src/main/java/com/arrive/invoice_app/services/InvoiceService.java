@@ -34,6 +34,9 @@ public class InvoiceService {
     @Autowired
     private PayPalClient payPalClient;
 
+    @Autowired
+    private InvoiceEventProducer invoiceEventProducer;
+
     public Invoice createInvoice(Invoice invoice) {
         Counter.builder("invoice.created")
                 .tag("request_id", UUID.randomUUID().toString())
@@ -55,7 +58,9 @@ public class InvoiceService {
         }
         invoice.setTotalAmount(total);
 
-        return invoiceRepository.save(invoice);
+        Invoice saved = invoiceRepository.save(invoice);
+        invoiceEventProducer.sendInvoiceCreatedEvent(saved.getId(), saved.getCustomerName());
+        return saved;
     }
 
     public List<Invoice> getAllInvoices() {
@@ -155,7 +160,9 @@ public class InvoiceService {
         }
 
         invoice.setUpdatedAt(LocalDateTime.now());
-        return invoiceRepository.save(invoice);
+        Invoice saved = invoiceRepository.save(invoice);
+        invoiceEventProducer.sendPaymentProcessedEvent(saved.getId(), amount, saved.getStatus().name());
+        return saved;
     }
 
     public List<Invoice> advancedSearch(String customerName, String status, String dateFrom, String dateTo) {
